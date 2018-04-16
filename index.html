@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    
+
+    <!-- Local Stylsheet -->
+    <link rel="stylesheet" href="static/styles/styles.css">
+
+    <title>Belly Button Biodiversity</title>
+
+  </head>
+  <body>
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="jumbotron jumbotron-fluid">
+                    <div class="container">
+                        <h1 class="display-4">Belly Button Biodiversity</h1>
+                        <p class="lead">Select a sample to explore the dataset!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-sm-2">
+                    <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Select a Sample</h5>
+                                    <div id="select_card">
+                                        <select id="sample_select" onchange="sampleCall(this.value)">
+                                        </select>
+                                    </div>
+                            </div>
+                    </div>
+                
+                <div id="metadata_card">
+                    <div class="card border-dark mb-3">
+                        <div class="card-header"><strong>Sample Metadata</strong></div>
+                        <div class="card-body text-dark" id="metadata-card">
+                        </div>
+                     </div>
+                </div>
+            </div>
+            <div class="col-sm-5">
+                <div id="pie_chart">
+                    <!--<p>{{ test }}</p>-->
+                </div>
+            </div>
+            <div class="col-sm-5">
+                <div id="guage">
+
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <div id="bubble_plot">
+
+                </div>
+            </div>
+        </div>
+    </div>>
+
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="static/javascript/script.js"></script>
+    <script>
+    // here just doing the script inside html, will move
+    // it out later, browser is cacheing old copies if i 
+    // separate it
+    // DROPDOWN
+    // call api to get list of sample names for dropdown
+    var names_url = 'http://127.0.0.1:5000/names'    
+    
+    Plotly.d3.json(names_url, function(error, response){
+        if (error) console.warn(error)
+        // add an option for each name, add a value attribute
+        response.forEach(function(element){
+            var select_box = document.getElementById('sample_select')
+            var this_element = document.createElement('option')
+            var inner_text = document.createTextNode(element)
+            this_element.setAttribute('value', element)
+            this_element.appendChild(inner_text)
+            select_box.appendChild(this_element)
+        })
+    })
+    // main function to render plots, called on dropdown change
+    function sampleCall(sample){
+        
+        var sample1 = sample
+        
+        // METDATA CARD
+        // query sample metadata API to populate metadata card
+        // base url for metadata API
+        var metadata_url = 'http://127.0.0.1:5000/metadata/'
+        // call metadata API with url and sample name
+        Plotly.d3.json((metadata_url + sample1), function(error, response){
+            if (error) console.warn(error)
+            // remove child nodes to clear the area
+            var metadata_card = document.getElementById('metadata-card')
+            metadata_card.innerHTML = '';
+            // iterate over response to populate div with p tags
+            for (var key in response){
+                var metadata_card = document.getElementById('metadata-card');
+                var this_element = document.createElement('p');
+                var inner_text = document.createTextNode(key + ': ' + response[key]);
+                this_element.appendChild(inner_text);
+                metadata_card.appendChild(this_element);
+            }
+        })
+        
+        // PIE CHART
+        // base urls for API calls for top 10 otus in sample
+        // as well as base url for returning otu descriptions
+        var samples_url = 'http://127.0.0.1:5000/samples/'
+        var ltuf_url = 'http://127.0.0.1:5000/otu_search/'
+        // call API to get sorted otu_ids and sorted sample_values
+        Plotly.d3.json((samples_url + sample1), function(error, response) {
+            if (error) console.warn(error)
+            var pietrace = {
+                // slice the first 10 (top 10) for pie chart
+                values: response[0].sample_values.slice(0,10),
+                labels: response[0].otu_ids.slice(0,10),
+                type: 'pie'
+            }
+            var pielayout = {
+                title: "Top 10 Bacteria in Sample " + sample1,
+                width: 500,
+                height: 500
+            }
+            var piedata = [pietrace]
+            // plot it
+            Plotly.newPlot('pie_chart', piedata, pielayout)
+            
+            // now call ltuf api with the otu_ids to get hovertext
+            // and update plot
+            // (api takes a list of samples, parses, and returns list
+            //  of descriptions of the supplied otu_ids)
+            Plotly.d3.json((ltuf_url + response[0].otu_ids.slice(0,10)), function(error, response){
+                if (error) console.warn(error)
+                
+                var update = {
+                    hovertext: [response]
+                }
+                Plotly.update('pie_chart', update)
+                
+            })
+            
+            // GAUGE CHART
+            wfreq_url = 'http://127.0.0.1:5000/wfreq/'
+            Plotly.d3.json((wfreq_url + sample1), function(error, response){
+                if (error) console.warn(error)
+                // Plotly.js guage chart template, modified:
+                // Enter a speed between 0 and 9
+                var level = response;
+                // Trig to calc meter point
+                var degrees = 9 - level,
+                    radius = .5;
+                var radians = degrees * Math.PI / 9;
+                var x = radius * Math.cos(radians);
+                var y = radius * Math.sin(radians);
+                // Path: may have to change to create a better triangle
+                var mainPath = 'M -.0 -0.025 L .0 0.025 L ',
+                    pathX = String(x),
+                    space = ' ',
+                    pathY = String(y),
+                    pathEnd = ' Z';
+                var path = mainPath.concat(pathX,space,pathY,pathEnd);
+                var data = [{ type: 'scatter',
+                x: [0], y:[0],
+                    marker: {size: 28, color:'850000'},
+                    showlegend: false,
+                    name: 'washings per week',
+                    text: level,
+                    hoverinfo: 'text+name'},
+                { values: [50/9, 50/9, 50/9, 50/9, 50/9, 50/9, 50/9, 50/9, 50/9, 50],
+                rotation: 90,
+                text: ['8-9', '7-8', '6-7', '5-6', '4-5', '3-4', '2-3', '1-2', '0-1'],
+                textinfo: 'text',
+                textposition:'inside',
+                marker: {colors:['rgba(0, 100, 0, .5)', 'rgba(3, 108, 0, .5)',
+                                        'rgba(14, 127, 0, .5)', 'rgba(110, 154, 22, .5)',
+                                        'rgba(170, 202, 42, .5)', 'rgba(202, 209, 95, .5)',
+                                        'rgba(210, 206, 145, .5)', 'rgba(232, 226, 202, .5)',
+                                        'rgba(252, 240, 215, .5)', 'rgba(255, 255, 255, 0)']},
+                labels: ['8-9', '7-8', '6-7', '5-6', '4-5', '3-4', '2-3', '1-2', '0-1'],
+                hoverinfo: 'label',
+                hole: .5,
+                type: 'pie',
+                showlegend: false
+                }];
+                var layout = {
+                shapes:[{
+                    type: 'path',
+                    path: path,
+                    fillcolor: '850000',
+                    line: {
+                        color: '850000'
+                    }
+                    }],
+                title: 'Belly Button Wash Frequency Per Week',
+                height: 500,
+                width: 500,
+                xaxis: {zeroline:false, showticklabels:false,
+                            showgrid: false, range: [-1, 1]},
+                yaxis: {zeroline:false, showticklabels:false,
+                            showgrid: false, range: [-1, 1]}
+                };
+                Plotly.react('guage', data, layout);
+            })
+            // BUBBLE PLOT
+            var bubbletrace = {
+                x: response[0].otu_ids.slice(0,50),
+                y: response[0].sample_values.slice(0,50),
+                mode: 'markers',
+                marker: {
+                    size: response[0].sample_values.slice(0,50),
+                    color: response[0].otu_ids.slice(0,50),
+                    colorscale: 'Earth'
+                }
+            }
+            var bubblelayout = {
+                title: 'Bubble Plot',
+                width: 1100,
+                height: 600
+            }
+            
+            var bubbledata = [bubbletrace]
+            Plotly.react('bubble_plot', bubbledata, bubblelayout)
+            // now update bubble plot with hovertext from second API call:
+            Plotly.d3.json((ltuf_url + response[0].otu_ids.slice(0,50)), function(error, response){
+                if (error) console.warn(error)
+                var update = {
+                    text: [response]
+                }
+                Plotly.update('bubble_plot', update)
+                
+            })
+        })
+    }
+    // initialize first rendering (Plotly.react allows both
+    // first time rendering and updating from same command)
+    sampleCall('BB_940')
+    
+    
+    
+    </script>
+  </body>
+</html>
